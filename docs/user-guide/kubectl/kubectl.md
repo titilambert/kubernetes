@@ -1,5 +1,29 @@
 <!-- BEGIN MUNGE: UNVERSIONED_WARNING -->
 
+<!-- BEGIN STRIP_FOR_RELEASE -->
+
+<img src="http://kubernetes.io/img/warning.png" alt="WARNING"
+     width="25" height="25">
+<img src="http://kubernetes.io/img/warning.png" alt="WARNING"
+     width="25" height="25">
+<img src="http://kubernetes.io/img/warning.png" alt="WARNING"
+     width="25" height="25">
+<img src="http://kubernetes.io/img/warning.png" alt="WARNING"
+     width="25" height="25">
+<img src="http://kubernetes.io/img/warning.png" alt="WARNING"
+     width="25" height="25">
+
+<h2>PLEASE NOTE: This document applies to the HEAD of the source tree</h2>
+
+If you are using a released version of Kubernetes, you should
+refer to the docs that go with that version.
+
+Documentation for other releases can be found at
+[releases.k8s.io](http://releases.k8s.io).
+</strong>
+--
+
+<!-- END STRIP_FOR_RELEASE -->
 
 <!-- END MUNGE: UNVERSIONED_WARNING -->
 
@@ -57,6 +81,7 @@ kubectl
 * [kubectl convert](kubectl_convert.md)	 - Convert config files between different API versions
 * [kubectl cordon](kubectl_cordon.md)	 - Mark node as unschedulable
 * [kubectl create](kubectl_create.md)	 - Create a resource by filename or stdin
+* [kubectl daemonset-rolling-update](kubectl_daemonset-rolling-update.md)	 - Perform a rolling update of the given DaemonSet.
 * [kubectl delete](kubectl_delete.md)	 - Delete resources by filenames, stdin, resources and names, or by resources and label selector.
 * [kubectl describe](kubectl_describe.md)	 - Show details of a specific resource or group of resources
 * [kubectl drain](kubectl_drain.md)	 - Drain node in preparation for maintenance
