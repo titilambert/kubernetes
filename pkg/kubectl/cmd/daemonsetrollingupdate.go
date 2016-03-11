@@ -123,7 +123,7 @@ func RunDaemonSetRollingUpdate(f *cmdutil.Factory, out io.Writer, cmd *cobra.Com
 	rollback := cmdutil.GetFlagBool(cmd, "rollback")
 	rInterval := cmdutil.GetFlagDuration(cmd, "recreate-interval")
 	dInterval := cmdutil.GetFlagDuration(cmd, "delete-interval")
-	//timeout := cmdutil.GetFlagDuration(cmd, "timeout")
+	timeout := cmdutil.GetFlagDuration(cmd, "timeout")
 	dryrun := cmdutil.GetFlagBool(cmd, "dry-run")
 	outputFormat := cmdutil.GetFlagString(cmd, "output")
 
@@ -253,6 +253,7 @@ func RunDaemonSetRollingUpdate(f *cmdutil.Factory, out io.Writer, cmd *cobra.Com
 		NewDs:     newDs,
 		RInterval: rInterval,
 		DInterval: dInterval,
+		Timeout: timeout
 	}
 
 	updater = kubectl.NewDaemonSetRollingUpdater(newDs.Namespace, client)
