@@ -70,6 +70,7 @@ func (r *DaemonSetRollingUpdater) Update(config *DaemonSetRollingUpdaterConfig) 
 	oldDs := config.OldDs
 	rinterval := config.RInterval
 	dinterval := config.DInterval
+	timeout := config.Timeout
 
 	// Create the new DS
 	err := r.CreateDs(newDs, out)
@@ -84,7 +85,7 @@ func (r *DaemonSetRollingUpdater) Update(config *DaemonSetRollingUpdaterConfig) 
 		return err
 	}
 
-	return r.RecreatePods(newDs, rinterval, out)
+	return r.RecreatePods(newDs, rinterval, timeout, out)
 }
 
 func (r *DaemonSetRollingUpdater) DeleteDs(name string, out io.Writer) error {
@@ -106,7 +107,7 @@ func (r *DaemonSetRollingUpdater) CreateDs(ds *extensions.DaemonSet, out io.Writ
 	return nil
 }
 
-func (r *DaemonSetRollingUpdater) RecreatePods(ds *extensions.DaemonSet, rinterval time.Duration, out io.Writer) error {
+func (r *DaemonSetRollingUpdater) RecreatePods(ds *extensions.DaemonSet, rinterval, timeout time.Duration, out io.Writer) error {
 
 	podsDeleteOptions := api.NewDeleteOptions(int64(5))
 	// Get all pods from the DS
@@ -133,6 +134,7 @@ func (r *DaemonSetRollingUpdater) RecreatePods(ds *extensions.DaemonSet, rinterv
 
 	// Iterate on all pods
 	for _, pod := range podOldList.Items {
+		timer := time.NewTimer(timeout)
 		// Deleting pod
 		// Pod label to filter
 		podLabelOld := labels.SelectorFromSet(pod.Labels)
@@ -150,9 +152,19 @@ func (r *DaemonSetRollingUpdater) RecreatePods(ds *extensions.DaemonSet, rinterv
 		// Delete pod
 		r.c.Pods(r.ns).Delete(pod.ObjectMeta.Name, podsDeleteOptions)
 		// Waiting for pod deletion
-		event := <-watcherDelete.ResultChan()
+		var event watch.Event
+		select {
+		case <-timer.C:
+			return fmt.Errorf("Timeout waiting pod deletion %s", pod.ObjectMeta.Name)
+		case event = <-watcherDelete.ResultChan():
+		}
+
 		for event.Type != watch.Deleted {
-			event = <-watcherDelete.ResultChan()
+			select {
+			case <-timer.C:
+				return fmt.Errorf("Timeout waiting pod deletion %s", pod.ObjectMeta.Name)
+			case event = <-watcherDelete.ResultChan():
+			}
 		}
 		// Preparing to wait pod creation
 		podlabelNew := labels.SelectorFromSet(ds.Spec.Template.Labels)
@@ -167,7 +179,11 @@ func (r *DaemonSetRollingUpdater) RecreatePods(ds *extensions.DaemonSet, rinterv
 		// Waiting for pod creation
 		running := false
 		for !running {
-			<-watcherCreate.ResultChan()
+			select {
+			case <-timer.C:
+				return fmt.Errorf("Timeout waiting pod creation %s", pod.ObjectMeta.Name)
+			case <-watcherCreate.ResultChan():
+			}
 			podOldList, _ = r.c.Pods(r.ns).List(listoptions4)
 			for _, pod := range podOldList.Items {
 				// Wait for the pod to be ready
