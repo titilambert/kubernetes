@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/apis/extensions"
 	client "k8s.io/kubernetes/pkg/client/unversioned"
 	"k8s.io/kubernetes/pkg/fields"
@@ -73,14 +74,14 @@ func (r *DaemonSetRollingUpdater) Update(config *DaemonSetRollingUpdaterConfig) 
 	timeout := config.Timeout
 
 	// Create the new DS
-	err := r.CreateDs(newDs, out)
+	err := r.CreateDs(newDs, timeout, out)
 	if err != nil {
 		return err
 	}
 
 	time.Sleep(dinterval)
 
-	err = r.DeleteDs(oldDs.Name, out)
+	err = r.DeleteDs(oldDs, timeout, out)
 	if err != nil {
 		return err
 	}
@@ -88,21 +89,81 @@ func (r *DaemonSetRollingUpdater) Update(config *DaemonSetRollingUpdaterConfig) 
 	return r.RecreatePods(newDs, rinterval, timeout, out)
 }
 
-func (r *DaemonSetRollingUpdater) DeleteDs(name string, out io.Writer) error {
-	// TODO BLOCK until DS is deleted
-	err := r.c.Extensions().DaemonSets(r.ns).Delete(name)
+func (r *DaemonSetRollingUpdater) DeleteDs(ds *extensions.DaemonSet, timeout time.Duration, out io.Writer) error {
+	// Prepare watcher filter
+	dsLabelSelector, err := unversioned.LabelSelectorAsSelector(ds.Spec.Selector)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "Deleted %s\n", name)
+	fieldSelector, err := fields.ParseSelector("metadata.name=" + ds.Name)
+	if err != nil {
+		return err
+	}
+	// Watch for event with the label of the current pod
+	listoptions2 := api.ListOptions{
+		LabelSelector: dsLabelSelector,
+		FieldSelector: fieldSelector,
+	}
+	// Start watcher
+	watcherDelete, _ := r.c.Extensions().DaemonSets(r.ns).Watch(listoptions2)
+
+	// Delete DaemonSet
+	err = r.c.Extensions().DaemonSets(r.ns).Delete(ds.Name)
+	if err != nil {
+		return err
+	}
+
+	timer := time.NewTimer(timeout)
+	// Waiting for pod deletion
+	var event watch.Event
+	fmt.Print(event.Type)
+	for event.Type != watch.Deleted {
+		select {
+		case <-timer.C:
+			return fmt.Errorf("Timeout waiting ds deletion %s", ds.ObjectMeta.Name)
+		case event = <-watcherDelete.ResultChan():
+		}
+	}
+
+	fmt.Fprintf(out, "Deleted %s\n", ds.Name)
 	return nil
 }
 
-func (r *DaemonSetRollingUpdater) CreateDs(ds *extensions.DaemonSet, out io.Writer) error {
-	_, err := r.c.Extensions().DaemonSets(r.ns).Create(ds)
+func (r *DaemonSetRollingUpdater) CreateDs(ds *extensions.DaemonSet, timeout time.Duration, out io.Writer) error {
+	// Prepare watcher filter
+	dsLabelSelector, err := unversioned.LabelSelectorAsSelector(ds.Spec.Selector)
 	if err != nil {
 		return err
 	}
+	fieldSelector, err := fields.ParseSelector("metadata.name=" + ds.Name)
+	if err != nil {
+		return err
+	}
+	// Watch for event with the label of the current pod
+	listoptions2 := api.ListOptions{
+		LabelSelector: dsLabelSelector,
+		FieldSelector: fieldSelector,
+	}
+	// Run watcher
+	watcherCreate, _ := r.c.Extensions().DaemonSets(r.ns).Watch(listoptions2)
+
+	// Create Daemonset
+	_, err = r.c.Extensions().DaemonSets(r.ns).Create(ds)
+	if err != nil {
+		return err
+	}
+
+	timer := time.NewTimer(timeout)
+	// Waiting for pod deletion
+	var event watch.Event
+	for event.Type != watch.Added {
+		select {
+		case <-timer.C:
+			return fmt.Errorf("Timeout waiting ds creation %s", ds.ObjectMeta.Name)
+		case event = <-watcherCreate.ResultChan():
+		}
+	}
+
 	fmt.Fprintf(out, "Created %s\n", ds.Name)
 	return nil
 }

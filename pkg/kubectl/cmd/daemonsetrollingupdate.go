@@ -202,7 +202,7 @@ func RunDaemonSetRollingUpdate(f *cmdutil.Factory, out io.Writer, cmd *cobra.Com
 			fmt.Fprintf(out, "Only recreating pods of %s. Data provided will be ignored because of inconsitent state", newDs.Name)
 			return nil
 		} else {
-			return updater.RecreatePods(newDs, rInterval, out)
+			return updater.RecreatePods(newDs, rInterval, timeout, out)
 		}
 	}
 
@@ -239,11 +239,11 @@ func RunDaemonSetRollingUpdate(f *cmdutil.Factory, out io.Writer, cmd *cobra.Com
 	if rollback {
 
 		fmt.Fprintf(out, "Rolling back\n")
-		err = updater.DeleteDs(newDs.Name, out)
+		err = updater.DeleteDs(newDs, timeout, out)
 		if err != nil {
 			return err
 		}
-		return updater.RecreatePods(oldDs, rInterval, out)
+		return updater.RecreatePods(oldDs, rInterval, timeout, out)
 
 	}
 
@@ -253,7 +253,7 @@ func RunDaemonSetRollingUpdate(f *cmdutil.Factory, out io.Writer, cmd *cobra.Com
 		NewDs:     newDs,
 		RInterval: rInterval,
 		DInterval: dInterval,
-		Timeout: timeout
+		Timeout:   timeout,
 	}
 
 	updater = kubectl.NewDaemonSetRollingUpdater(newDs.Namespace, client)
