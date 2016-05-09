@@ -114,14 +114,25 @@ func (r *DaemonSetRollingUpdater) DeleteDs(ds *extensions.DaemonSet, timeout tim
 	}
 
 	timer := time.NewTimer(timeout)
-	// Waiting for pod deletion
+	// Waiting for ds deletion
 	var event watch.Event
-	fmt.Print(event.Type)
-	for event.Type != watch.Deleted {
+	var event_obj *extensions.DaemonSet
+	select {
+	case <-timer.C:
+		return fmt.Errorf("Timeout waiting ds deletion %s", ds.ObjectMeta.Name)
+	case event = <-watcherDelete.ResultChan():
+		event_obj, _ = event.Object.(*extensions.DaemonSet)
+//		fmt.Printf("\n\nDELETED\nEVENT: %s\n", event)
+//		fmt.Printf("EVENT OBJ: %s\n", event_obj)
+	}
+	for event.Type != watch.Deleted || event_obj.Name != ds.ObjectMeta.Name {
 		select {
 		case <-timer.C:
 			return fmt.Errorf("Timeout waiting ds deletion %s", ds.ObjectMeta.Name)
 		case event = <-watcherDelete.ResultChan():
+			event_obj, _ = event.Object.(*extensions.DaemonSet)
+//			fmt.Printf("\n\nDELETED\nEVENT: %s\n", event)
+//			fmt.Printf("EVENT OBJ: %s\n", event_obj)
 		}
 	}
 
@@ -154,13 +165,25 @@ func (r *DaemonSetRollingUpdater) CreateDs(ds *extensions.DaemonSet, timeout tim
 	}
 
 	timer := time.NewTimer(timeout)
-	// Waiting for pod deletion
+	// Waiting for ds creation
 	var event watch.Event
-	for event.Type != watch.Added {
+	var event_obj *extensions.DaemonSet
+	select {
+	case <-timer.C:
+		return fmt.Errorf("Timeout waiting ds creation %s", ds.ObjectMeta.Name)
+	case event = <-watcherCreate.ResultChan():
+		event_obj, _ = event.Object.(*extensions.DaemonSet)
+//		fmt.Printf("\n\nADDED\nEVENT: %s\n", event)
+//		fmt.Printf("EVENT OBJ: %s\n", event_obj)
+	}
+	for event.Type != watch.Added || event_obj.Name != ds.ObjectMeta.Name {
 		select {
 		case <-timer.C:
 			return fmt.Errorf("Timeout waiting ds creation %s", ds.ObjectMeta.Name)
 		case event = <-watcherCreate.ResultChan():
+			event_obj, _ = event.Object.(*extensions.DaemonSet)
+//			fmt.Printf("\n\nADDED\nEVENT: %s\n", event)
+//			fmt.Printf("EVENT OBJ: %s\n", event_obj)
 		}
 	}
 
@@ -214,17 +237,23 @@ func (r *DaemonSetRollingUpdater) RecreatePods(ds *extensions.DaemonSet, rinterv
 		r.c.Pods(r.ns).Delete(pod.ObjectMeta.Name, podsDeleteOptions)
 		// Waiting for pod deletion
 		var event watch.Event
+		var event_obj *api.Pod
 		select {
 		case <-timer.C:
 			return fmt.Errorf("Timeout waiting pod deletion %s", pod.ObjectMeta.Name)
 		case event = <-watcherDelete.ResultChan():
+			event_obj, _ = event.Object.(*api.Pod)
+//			fmt.Printf("\n\nDELETED POD\nEVENT: %s\n", event)
+//			fmt.Printf("EVENT OBJ: %s\n", event_obj)
 		}
-
-		for event.Type != watch.Deleted {
+		for event.Type != watch.Deleted || event_obj.Name != pod.ObjectMeta.Name {
 			select {
 			case <-timer.C:
 				return fmt.Errorf("Timeout waiting pod deletion %s", pod.ObjectMeta.Name)
 			case event = <-watcherDelete.ResultChan():
+				event_obj, _ = event.Object.(*api.Pod)
+//				fmt.Printf("\n\nPOD DELETED\nEVENT: %s\n", event)
+//				fmt.Printf("EVENT OBJ: %s\n", event_obj)
 			}
 		}
 		// Preparing to wait pod creation
