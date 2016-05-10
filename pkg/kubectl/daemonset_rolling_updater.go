@@ -117,26 +117,16 @@ func (r *DaemonSetRollingUpdater) DeleteDs(ds *extensions.DaemonSet, timeout tim
 
 	timer := time.NewTimer(timeout)
 	// Waiting for ds deletion
-	var event watch.Event
-	var event_obj *extensions.DaemonSet
-	select {
-	case <-timer.C:
-		return fmt.Errorf("Timeout waiting ds deletion %s", ds.ObjectMeta.Name)
-	case event = <-watcherDelete.ResultChan():
-		event_obj, _ = event.Object.(*extensions.DaemonSet)
-		glog.V(6).Infof("\n\n0DELETED\nEVENT: %s\n", event)
-		glog.V(6).Infof("EVENT OBJ: %s\n", event_obj)
-		glog.V(6).Infof("CURENT OBJ: %s\n", ds)
-	}
-	for event.Type != watch.Deleted || event_obj.Name != ds.ObjectMeta.Name {
+	deleted := false
+	for !deleted {
 		select {
 		case <-timer.C:
 			return fmt.Errorf("Timeout waiting ds deletion %s", ds.ObjectMeta.Name)
-		case event = <-watcherDelete.ResultChan():
-			event_obj, _ = event.Object.(*extensions.DaemonSet)
-			glog.V(6).Infof("\n\nDELETED\nEVENT: %s\n", event)
-			glog.V(6).Infof("EVENT OBJ: %s\n", event_obj)
-			glog.V(6).Infof("CURENT OBJ: %s\n", ds)
+		case <-watcherDelete.ResultChan():
+			_, err = r.c.Extensions().DaemonSets(r.ns).Get(ds.Name)
+			if err != nil {
+				deleted = true
+			}
 		}
 	}
 
@@ -170,26 +160,16 @@ func (r *DaemonSetRollingUpdater) CreateDs(ds *extensions.DaemonSet, timeout tim
 
 	timer := time.NewTimer(timeout)
 	// Waiting for ds creation
-	var event watch.Event
-	var event_obj *extensions.DaemonSet
-	select {
-	case <-timer.C:
-		return fmt.Errorf("Timeout waiting ds creation %s", ds.ObjectMeta.Name)
-	case event = <-watcherCreate.ResultChan():
-		event_obj, _ = event.Object.(*extensions.DaemonSet)
-		glog.V(6).Infof("\n\n0ADDED\nEVENT: %s\n", event)
-		glog.V(6).Infof("EVENT OBJ: %s\n", event_obj)
-		glog.V(6).Infof("CURENT OBJ: %s\n", ds)
-	}
-	for event.Type != watch.Added || event_obj.Name != ds.ObjectMeta.Name {
+	created := false
+	for !created {
 		select {
 		case <-timer.C:
 			return fmt.Errorf("Timeout waiting ds creation %s", ds.ObjectMeta.Name)
-		case event = <-watcherCreate.ResultChan():
-			event_obj, _ = event.Object.(*extensions.DaemonSet)
-			glog.V(6).Infof("\n\nADDED\nEVENT: %s\n", event)
-			glog.V(6).Infof("EVENT OBJ: %s\n", event_obj)
-			glog.V(6).Infof("CURENT OBJ: %s\n", ds)
+		case <-watcherCreate.ResultChan():
+			_, err = r.c.Extensions().DaemonSets(r.ns).Get(ds.Name)
+			if err == nil {
+				created = true
+			}
 		}
 	}
 
