@@ -21,6 +21,8 @@ import (
 	"io"
 	"time"
 
+        "github.com/golang/glog"
+
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/apis/extensions"
@@ -122,8 +124,8 @@ func (r *DaemonSetRollingUpdater) DeleteDs(ds *extensions.DaemonSet, timeout tim
 		return fmt.Errorf("Timeout waiting ds deletion %s", ds.ObjectMeta.Name)
 	case event = <-watcherDelete.ResultChan():
 		event_obj, _ = event.Object.(*extensions.DaemonSet)
-//		fmt.Printf("\n\nDELETED\nEVENT: %s\n", event)
-//		fmt.Printf("EVENT OBJ: %s\n", event_obj)
+		glog.V(6).Infof("\n\nDELETED\nEVENT: %s\n", event)
+		glog.V(6).Infof("EVENT OBJ: %s\n", event_obj)
 	}
 	for event.Type != watch.Deleted || event_obj.Name != ds.ObjectMeta.Name {
 		select {
@@ -131,8 +133,8 @@ func (r *DaemonSetRollingUpdater) DeleteDs(ds *extensions.DaemonSet, timeout tim
 			return fmt.Errorf("Timeout waiting ds deletion %s", ds.ObjectMeta.Name)
 		case event = <-watcherDelete.ResultChan():
 			event_obj, _ = event.Object.(*extensions.DaemonSet)
-//			fmt.Printf("\n\nDELETED\nEVENT: %s\n", event)
-//			fmt.Printf("EVENT OBJ: %s\n", event_obj)
+			glog.V(6).Infof("\n\nDELETED\nEVENT: %s\n", event)
+			glog.V(6).Infof("EVENT OBJ: %s\n", event_obj)
 		}
 	}
 
@@ -173,8 +175,8 @@ func (r *DaemonSetRollingUpdater) CreateDs(ds *extensions.DaemonSet, timeout tim
 		return fmt.Errorf("Timeout waiting ds creation %s", ds.ObjectMeta.Name)
 	case event = <-watcherCreate.ResultChan():
 		event_obj, _ = event.Object.(*extensions.DaemonSet)
-//		fmt.Printf("\n\nADDED\nEVENT: %s\n", event)
-//		fmt.Printf("EVENT OBJ: %s\n", event_obj)
+		glog.V(6).Infof("\n\nADDED\nEVENT: %s\n", event)
+		glog.V(6).Infof("EVENT OBJ: %s\n", event_obj)
 	}
 	for event.Type != watch.Added || event_obj.Name != ds.ObjectMeta.Name {
 		select {
@@ -182,8 +184,8 @@ func (r *DaemonSetRollingUpdater) CreateDs(ds *extensions.DaemonSet, timeout tim
 			return fmt.Errorf("Timeout waiting ds creation %s", ds.ObjectMeta.Name)
 		case event = <-watcherCreate.ResultChan():
 			event_obj, _ = event.Object.(*extensions.DaemonSet)
-//			fmt.Printf("\n\nADDED\nEVENT: %s\n", event)
-//			fmt.Printf("EVENT OBJ: %s\n", event_obj)
+			glog.V(6).Infof("\n\nADDED\nEVENT: %s\n", event)
+			glog.V(6).Infof("EVENT OBJ: %s\n", event_obj)
 		}
 	}
 
@@ -243,8 +245,8 @@ func (r *DaemonSetRollingUpdater) RecreatePods(ds *extensions.DaemonSet, rinterv
 			return fmt.Errorf("Timeout waiting pod deletion %s", pod.ObjectMeta.Name)
 		case event = <-watcherDelete.ResultChan():
 			event_obj, _ = event.Object.(*api.Pod)
-//			fmt.Printf("\n\nDELETED POD\nEVENT: %s\n", event)
-//			fmt.Printf("EVENT OBJ: %s\n", event_obj)
+			glog.V(6).Infof("\n\nDELETED POD\nEVENT: %s\n", event)
+			glog.V(6).Infof("EVENT OBJ: %s\n", event_obj)
 		}
 		for event.Type != watch.Deleted || event_obj.Name != pod.ObjectMeta.Name {
 			select {
@@ -252,8 +254,8 @@ func (r *DaemonSetRollingUpdater) RecreatePods(ds *extensions.DaemonSet, rinterv
 				return fmt.Errorf("Timeout waiting pod deletion %s", pod.ObjectMeta.Name)
 			case event = <-watcherDelete.ResultChan():
 				event_obj, _ = event.Object.(*api.Pod)
-//				fmt.Printf("\n\nPOD DELETED\nEVENT: %s\n", event)
-//				fmt.Printf("EVENT OBJ: %s\n", event_obj)
+				glog.V(6).Infof("\n\nPOD DELETED\nEVENT: %s\n", event)
+				glog.V(6).Infof("EVENT OBJ: %s\n", event_obj)
 			}
 		}
 		// Preparing to wait pod creation
