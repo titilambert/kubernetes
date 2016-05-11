@@ -29,7 +29,6 @@ import (
 	client "k8s.io/kubernetes/pkg/client/unversioned"
 	"k8s.io/kubernetes/pkg/fields"
 	"k8s.io/kubernetes/pkg/labels"
-	"k8s.io/kubernetes/pkg/watch"
 )
 
 // DaemonSetRollingUpdaterConfig is the configuration for a rolling update for daemon set deployment process.
@@ -116,6 +115,7 @@ func (r *DaemonSetRollingUpdater) DeleteDs(ds *extensions.DaemonSet, timeout tim
 	}
 
 	timer := time.NewTimer(timeout)
+	glog.V(6).Infof("Waiting for daemon set deletion: %s\n", ds.Name)
 	// Waiting for ds deletion
 	deleted := false
 	for !deleted {
@@ -130,7 +130,7 @@ func (r *DaemonSetRollingUpdater) DeleteDs(ds *extensions.DaemonSet, timeout tim
 		}
 	}
 
-	fmt.Fprintf(out, "Deleted %s\n", ds.Name)
+	glog.V(6).Infof("Daemon set deleted: %s\n", ds.Name)
 	return nil
 }
 
@@ -159,6 +159,7 @@ func (r *DaemonSetRollingUpdater) CreateDs(ds *extensions.DaemonSet, timeout tim
 	}
 
 	timer := time.NewTimer(timeout)
+	glog.V(6).Infof("Waiting for daemon set creation: %s\n", ds.Name)
 	// Waiting for ds creation
 	created := false
 	for !created {
@@ -173,7 +174,7 @@ func (r *DaemonSetRollingUpdater) CreateDs(ds *extensions.DaemonSet, timeout tim
 		}
 	}
 
-	fmt.Fprintf(out, "Created %s\n", ds.Name)
+	glog.V(6).Infof("Daemon set created: %s\n", ds.Name)
 	return nil
 }
 
@@ -222,6 +223,7 @@ func (r *DaemonSetRollingUpdater) RecreatePods(ds *extensions.DaemonSet, rinterv
 		// Delete pod
 		r.c.Pods(r.ns).Delete(pod.ObjectMeta.Name, podsDeleteOptions)
 		// Waiting for pod deletion
+		glog.V(6).Infof("Waiting for pod deletion: %s\n", pod.ObjectMeta.Name)
 		var event watch.Event
 		var event_obj *api.Pod
 		select {
@@ -244,6 +246,8 @@ func (r *DaemonSetRollingUpdater) RecreatePods(ds *extensions.DaemonSet, rinterv
 				glog.V(6).Infof("CURENT OBJ: %s\n", pod)
 			}
 		}
+		glog.V(6).Infof("Pod deleted: %s\n", pod.ObjectMeta.Name)
+
 		// Preparing to wait pod creation
 		podlabelNew := labels.SelectorFromSet(ds.Spec.Template.Labels)
 		fieldSelector2, err := fields.ParseSelector("spec.nodeName=" + pod.Spec.NodeName)
@@ -255,6 +259,7 @@ func (r *DaemonSetRollingUpdater) RecreatePods(ds *extensions.DaemonSet, rinterv
 		watcherCreate, _ := r.c.Pods(r.ns).Watch(listoptions4)
 
 		// Waiting for pod creation
+		glog.V(6).Infof("Waiting for pod creation on node: %s\n", pod.Spec.NodeName)
 		running := false
 		for !running {
 			select {
@@ -270,8 +275,9 @@ func (r *DaemonSetRollingUpdater) RecreatePods(ds *extensions.DaemonSet, rinterv
 				}
 			}
 		}
-
+		glog.V(6).Infof("Pod ready on node: %s\n", pod.Spec.NodeName)
 		time.Sleep(rinterval)
+		glog.V(6).Infof("Sleep done, will loop to the next node for pod recreation")
 
 	}
 	return nil
