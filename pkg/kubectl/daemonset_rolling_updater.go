@@ -224,26 +224,16 @@ func (r *DaemonSetRollingUpdater) RecreatePods(ds *extensions.DaemonSet, rinterv
 		r.c.Pods(r.ns).Delete(pod.ObjectMeta.Name, podsDeleteOptions)
 		// Waiting for pod deletion
 		glog.V(6).Infof("Waiting for pod deletion: %s\n", pod.ObjectMeta.Name)
-		var event watch.Event
-		var event_obj *api.Pod
-		select {
-		case <-timer.C:
-			return fmt.Errorf("Timeout waiting pod deletion %s", pod.ObjectMeta.Name)
-		case event = <-watcherDelete.ResultChan():
-			event_obj, _ = event.Object.(*api.Pod)
-			glog.V(6).Infof("\n\n0PODDEL\nEVENT: %s\n", event)
-			glog.V(6).Infof("EVENT OBJ: %s\n", event_obj)
-			glog.V(6).Infof("CURENT OBJ: %s\n", pod)
-		}
-		for event.Type != watch.Deleted || event_obj.Name != pod.ObjectMeta.Name {
+		deleted := false
+		for !deleted {
 			select {
 			case <-timer.C:
 				return fmt.Errorf("Timeout waiting pod deletion %s", pod.ObjectMeta.Name)
-			case event = <-watcherDelete.ResultChan():
-				event_obj, _ = event.Object.(*api.Pod)
-				glog.V(6).Infof("\n\nPODDEL\nEVENT: %s\n", event)
-				glog.V(6).Infof("EVENT OBJ: %s\n", event_obj)
-				glog.V(6).Infof("CURENT OBJ: %s\n", pod)
+			case <-watcherDelete.ResultChan():
+				_, err = r.c.Pods(r.ns).Get(pod.Name)
+				if err != nil {
+					deleted = true
+				}
 			}
 		}
 		glog.V(6).Infof("Pod deleted: %s\n", pod.ObjectMeta.Name)
