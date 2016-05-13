@@ -23,7 +23,7 @@ import (
 
 	fuzz "github.com/google/gofuzz"
 	"github.com/spf13/pflag"
-	"speter.net/go/exp/math/dec/inf"
+	inf "gopkg.in/inf.v0"
 )
 
 var (

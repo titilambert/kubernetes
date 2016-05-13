@@ -23,7 +23,7 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/conversion"
 	"k8s.io/kubernetes/pkg/runtime"
-	"speter.net/go/exp/math/dec/inf"
+	inf "gopkg.in/inf.v0"
 )
 
 const (

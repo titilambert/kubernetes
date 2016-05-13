@@ -27,7 +27,7 @@ import (
 	v1 "k8s.io/kubernetes/pkg/api/v1"
 	conversion "k8s.io/kubernetes/pkg/conversion"
 	intstr "k8s.io/kubernetes/pkg/util/intstr"
-	inf "speter.net/go/exp/math/dec/inf"
+	inf "gopkg.in/inf.v0"
 )
 
 func deepCopy_resource_Quantity(in resource.Quantity, out *resource.Quantity, c *conversion.Cloner) error {
