@@ -119,14 +119,16 @@ func (r *DaemonSetRollingUpdater) DeleteDs(ds *extensions.DaemonSet, timeout tim
 	// Waiting for ds deletion
 	deleted := false
 	for !deleted {
+		sleep := time.NewTimer(10 * time.Second) // In case we have no event for a while
 		select {
 		case <-timer.C:
 			return fmt.Errorf("Timeout waiting ds deletion %s", ds.ObjectMeta.Name)
 		case <-watcherDelete.ResultChan():
-			_, err = r.c.Extensions().DaemonSets(r.ns).Get(ds.Name)
-			if err != nil {
-				deleted = true
-			}
+		case <-sleep.C:
+		}
+		_, err = r.c.Extensions().DaemonSets(r.ns).Get(ds.Name)
+		if err != nil {
+			deleted = true
 		}
 	}
 
@@ -163,14 +165,16 @@ func (r *DaemonSetRollingUpdater) CreateDs(ds *extensions.DaemonSet, timeout tim
 	// Waiting for ds creation
 	created := false
 	for !created {
+		sleep := time.NewTimer(10 * time.Second) // In case we have no event for a while
 		select {
 		case <-timer.C:
 			return fmt.Errorf("Timeout waiting ds creation %s", ds.ObjectMeta.Name)
 		case <-watcherCreate.ResultChan():
-			_, err = r.c.Extensions().DaemonSets(r.ns).Get(ds.Name)
-			if err == nil {
-				created = true
-			}
+		case <-sleep.C:
+		}
+		_, err = r.c.Extensions().DaemonSets(r.ns).Get(ds.Name)
+		if err == nil {
+			created = true
 		}
 	}
 
@@ -226,14 +230,16 @@ func (r *DaemonSetRollingUpdater) RecreatePods(ds *extensions.DaemonSet, rinterv
 		glog.V(6).Infof("Waiting for pod deletion: %s\n", pod.ObjectMeta.Name)
 		deleted := false
 		for !deleted {
+			sleep := time.NewTimer(10 * time.Second) // In case we have no event for a while
 			select {
 			case <-timer.C:
 				return fmt.Errorf("Timeout waiting pod deletion %s", pod.ObjectMeta.Name)
 			case <-watcherDelete.ResultChan():
-				_, err = r.c.Pods(r.ns).Get(pod.Name)
-				if err != nil {
-					deleted = true
-				}
+			case <-sleep.C:
+			}
+			_, err = r.c.Pods(r.ns).Get(pod.Name)
+			if err != nil {
+				deleted = true
 			}
 		}
 		glog.V(6).Infof("Pod deleted: %s\n", pod.ObjectMeta.Name)
@@ -252,10 +258,12 @@ func (r *DaemonSetRollingUpdater) RecreatePods(ds *extensions.DaemonSet, rinterv
 		glog.V(6).Infof("Waiting for pod creation on node: %s\n", pod.Spec.NodeName)
 		running := false
 		for !running {
+			sleep := time.NewTimer(10 * time.Second) // In case we have no event for a while
 			select {
 			case <-timer.C:
 				return fmt.Errorf("Timeout waiting pod creation %s", pod.ObjectMeta.Name)
 			case <-watcherCreate.ResultChan():
+			case <-sleep.C:
 			}
 			podOldList, _ = r.c.Pods(r.ns).List(listoptions4)
 			for _, pod := range podOldList.Items {
