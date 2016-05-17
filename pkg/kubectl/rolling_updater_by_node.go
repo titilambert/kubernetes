@@ -23,6 +23,8 @@ import (
 	"strconv"
 	"time"
 
+        "github.com/golang/glog"
+
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/errors"
 	client "k8s.io/kubernetes/pkg/client/unversioned"
@@ -338,6 +340,7 @@ func (r *RollingUpdaterByNode) Update(config *RollingUpdaterByNodeConfig) error 
 			// Counting nb of pods running on this node
 			nbPods += 1
 			// Delete pod from the current node
+			glog.V(6).Infof("Deleting pod: %s\n", pod.Name)
 			r.c.Pods(oldRc.Namespace).Delete(pod.Name, podsDeleteOptions)
 			// Scale down one by one for each pod deleted
 			if nbPods <= oldPodNumber {
@@ -351,16 +354,19 @@ func (r *RollingUpdaterByNode) Update(config *RollingUpdaterByNodeConfig) error 
 		}
 		if len(podList.Items) > 0 {
 			// Waiting for pods deletion
+			glog.V(6).Infof("Waiting for pods deletion on node: %s\n", node.Name)
 			fmt.Fprintf(config.Out, "configtimeout %s", config.DeletionTimeout)
 			timer := time.NewTimer(config.DeletionTimeout)
 			watcher, _ := r.c.Pods(oldRc.Namespace).Watch(oldPodsListOptions)
 			if watcher != nil {
 				for nbPods > 0 {
+					sleep := time.NewTimer(10 * time.Second) // In case we have no event for a while
 					// Waiting for events or timeout
 					select {
 					case <-timer.C:
-						return fmt.Errorf("Timeout waiting pod deletion on node %s", node.Name)
+						return fmt.Errorf("Timeout waiting pods deletion on node %s", node.Name)
 					case <-watcher.ResultChan():
+					case <-sleep.C:
 					}
 					// init counter
 					nbPods = 0
@@ -488,13 +494,16 @@ func (r *RollingUpdaterByNode) scaleUp(newRc, oldRc *api.ReplicationController, 
 		timer := time.NewTimer(config.CreationTimeout)
 		//ticker.Reset(config.Timeout)
 		runningPods := 0
+		glog.V(6).Infof("Waiting for pods creation/readiness")
 		// Wait to get all pods ready
 		for runningPods < newRc.Spec.Replicas {
 			// Waiting for events or timeout
+			sleep := time.NewTimer(10 * time.Second) // In case we have no event for a while
 			select {
 			case <-timer.C:
 				return nil, fmt.Errorf("Timeout waiting pods creation")
 			case <-watcher.ResultChan():
+			case <-sleep.C:
 			}
 			// init counter
 			runningPods = 0
