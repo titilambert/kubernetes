@@ -23,7 +23,7 @@ import (
 	"strconv"
 	"time"
 
-        "github.com/golang/glog"
+	"github.com/golang/glog"
 
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/errors"
@@ -157,11 +157,11 @@ func (r *RollingUpdaterByNode) Update(config *RollingUpdaterByNodeConfig) error 
 	// Find an existing controller (for continuing an interrupted update) or
 	// create a new one if necessary.
 	sourceId := fmt.Sprintf("%s:%s", oldRc.Name, oldRc.UID)
-	newRc, existed, err := r.getOrCreateTargetController(config.NewRc, sourceId)
+	newRc, continueRollingUpdate, err := r.getOrCreateTargetController(config.NewRc, sourceId)
 	if err != nil {
 		return err
 	}
-	if existed {
+	if continueRollingUpdate {
 		fmt.Fprintf(out, "Continuing update with existing controller %s.\n", newRc.Name)
 	} else {
 		fmt.Fprintf(out, "Created %s\n", newRc.Name)
@@ -215,7 +215,7 @@ func (r *RollingUpdaterByNode) Update(config *RollingUpdaterByNodeConfig) error 
 	if err != nil {
 		return err
 	}
-	if len(nodeList.Items) == 0 && !existed {
+	if len(nodeList.Items) == 0 && !continueRollingUpdate {
 		return fmt.Errorf("No node with label '%s' found", rollingUpdateLabel)
 	}
 
@@ -237,7 +237,7 @@ func (r *RollingUpdaterByNode) Update(config *RollingUpdaterByNodeConfig) error 
 			annotationsSet = false
 		}
 	}
-	if !annotationsSet {
+	if !continueRollingUpdate {
 		// Get the number of pod running the old version
 		podList, err := r.c.Pods(oldRc.Namespace).List(allOldPodsListOptions)
 		if err != nil {
@@ -268,7 +268,7 @@ func (r *RollingUpdaterByNode) Update(config *RollingUpdaterByNodeConfig) error 
 				return err
 			}
 		}
-	} else {
+	} else if annotationsSet {
 		// If existed we have to add node with rolling update label
 		// in the node list
 		// Node label selector
@@ -283,6 +283,8 @@ func (r *RollingUpdaterByNode) Update(config *RollingUpdaterByNodeConfig) error 
 			return err
 		}
 		nodeList.Items = append(oldNodeList.Items, nodeList.Items...)
+	} else {
+		return fmt.Errorf("This is a continue rolling update by node but can not found annotation '%s' ", nodeAnnotationKey)
 	}
 
 	fmt.Fprintf(out, "Scaling up %s from %d to %d, scaling down %s from %d to 0 (Node by Node)\n",
@@ -346,7 +348,7 @@ func (r *RollingUpdaterByNode) Update(config *RollingUpdaterByNodeConfig) error 
 			if nbPods <= oldPodNumber {
 				tmpOldRc, err := r.scaleDownByOne(oldRc, config)
 				if err != nil {
-					fmt.Fprintf(out, "Scaling Down by one RC %s, error\n", oldRc.Name, err)
+					fmt.Fprintf(out, "Scaling Down by one RC %s, error: %s\n", oldRc.Name, err)
 				} else {
 					oldRc = tmpOldRc
 				}
@@ -354,8 +356,10 @@ func (r *RollingUpdaterByNode) Update(config *RollingUpdaterByNodeConfig) error 
 		}
 		if len(podList.Items) > 0 {
 			// Waiting for pods deletion
-			glog.V(6).Infof("Waiting for pods deletion on node: %s\n", node.Name)
-			fmt.Fprintf(config.Out, "configtimeout %s", config.DeletionTimeout)
+			fmt.Fprintf(config.Out,
+				"Waiting for pods deletion on node: %s\n - timeout %s",
+				node.Name,
+				config.DeletionTimeout)
 			timer := time.NewTimer(config.DeletionTimeout)
 			watcher, _ := r.c.Pods(oldRc.Namespace).Watch(oldPodsListOptions)
 			if watcher != nil {
@@ -494,7 +498,7 @@ func (r *RollingUpdaterByNode) scaleUp(newRc, oldRc *api.ReplicationController, 
 		timer := time.NewTimer(config.CreationTimeout)
 		//ticker.Reset(config.Timeout)
 		runningPods := 0
-		glog.V(6).Infof("Waiting for pods creation/readiness")
+		fmt.Fprintf(config.Out, "Waiting for pods creation/readiness\n")
 		// Wait to get all pods ready
 		for runningPods < newRc.Spec.Replicas {
 			// Waiting for events or timeout
@@ -514,6 +518,7 @@ func (r *RollingUpdaterByNode) scaleUp(newRc, oldRc *api.ReplicationController, 
 					runningPods++
 				}
 			}
+			fmt.Fprintf(config.Out, "Running pods: %d - Desired pods: %d\n", runningPods, newRc.Spec.Replicas)
 		}
 	}
 
@@ -524,6 +529,7 @@ func (r *RollingUpdaterByNode) scaleUp(newRc, oldRc *api.ReplicationController, 
 // thresholds defined on the config. scaleDown will safely no-op as necessary
 // when it detects redundancy or other relevant conditions.
 func (r *RollingUpdaterByNode) scaleDownByOne(oldRc *api.ReplicationController, config *RollingUpdaterByNodeConfig) (*api.ReplicationController, error) {
+	scaleRetryParams := NewRetryParams(config.Interval, config.Timeout)
 	oldRc, _ = r.c.ReplicationControllers(oldRc.Namespace).Get(oldRc.Name)
 	if oldRc.Spec.Replicas == 0 {
 		return oldRc, nil
@@ -532,7 +538,8 @@ func (r *RollingUpdaterByNode) scaleDownByOne(oldRc *api.ReplicationController, 
 	// Perform the scale-down.
 	fmt.Fprintf(config.Out, "Scaling %s down to %d\n", oldRc.Name, oldRc.Spec.Replicas)
 	// Scaledown without wait
-	scaledRc, err := r.scaleAndWait(oldRc, nil, nil)
+	scaledRc, err := r.scaleAndWait(oldRc, scaleRetryParams, scaleRetryParams)
+
 	if err != nil {
 		return nil, err
 	}
