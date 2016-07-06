@@ -231,11 +231,20 @@ func (r *RollingUpdaterByNode) Update(config *RollingUpdaterByNodeConfig) error 
 
 	// Check if annotations (for pod number) are set on each node
 	annotationsSet := true
+	nbNodeNotAnnotated := 0
 	for _, node := range nodeList.Items {
 		if _, exists := node.Annotations[nodeAnnotationKey]; !exists {
 			// need to set annotations
 			annotationsSet = false
+			nbNodeNotAnnotated++
 		}
+	}
+	// Check if all nodes are NOT annotated
+	if len(nodeList.Items) == nbNodeNotAnnotated {
+		// This means no nodes are annotated
+		// So we need to recalculate the number of pod by node
+		// In fact, this is not really a continue
+		continueRollingUpdate = false
 	}
 	if !continueRollingUpdate {
 		// Get the number of pod running the old version
@@ -494,35 +503,35 @@ func (r *RollingUpdaterByNode) scaleUp(newRc, oldRc *api.ReplicationController, 
 		FieldSelector: fields.Everything(),
 	}
 	watcher, err := r.c.Pods(newRc.Namespace).Watch(NewPodsListOptions)
-    if err != nil {
-        fmt.Fprintf(config.Out, "Error creation pod watcher for pods creation: %s\n", err)
-        return nil, err
-    }
+	if err != nil {
+		fmt.Fprintf(config.Out, "Error creation pod watcher for pods creation: %s\n", err)
+		return nil, err
+	}
 
-    timer := time.NewTimer(config.CreationTimeout)
-    //ticker.Reset(config.Timeout)
-    runningPods := 0
-    fmt.Fprintf(config.Out, "Waiting for pods creation/readiness\n")
-    // Wait to get all pods ready
-    for runningPods < newRc.Spec.Replicas {
-        // Waiting for events or timeout
-        sleep := time.NewTimer(10 * time.Second) // In case we have no event for a while
-        select {
-        case <-timer.C:
-            return nil, fmt.Errorf("Timeout waiting pods creation")
-        case <-watcher.ResultChan():
-        case <-sleep.C:
-        }
-        // init counter
-        runningPods = 0
-        // Counting
-        podList, _ := r.c.Pods(newRc.Namespace).List(NewPodsListOptions)
-        for _, pod := range podList.Items {
-            if api.IsPodReady(&pod) {
-                runningPods++
-            }
-        }
-        fmt.Fprintf(config.Out, "Running pods: %d - Desired pods: %d\n", runningPods, newRc.Spec.Replicas)
+	timer := time.NewTimer(config.CreationTimeout)
+	//ticker.Reset(config.Timeout)
+	runningPods := 0
+	fmt.Fprintf(config.Out, "Waiting for pods creation/readiness\n")
+	// Wait to get all pods ready
+	for runningPods < newRc.Spec.Replicas {
+		// Waiting for events or timeout
+		sleep := time.NewTimer(10 * time.Second) // In case we have no event for a while
+		select {
+		case <-timer.C:
+			return nil, fmt.Errorf("Timeout waiting pods creation")
+		case <-watcher.ResultChan():
+		case <-sleep.C:
+		}
+		// init counter
+		runningPods = 0
+		// Counting
+		podList, _ := r.c.Pods(newRc.Namespace).List(NewPodsListOptions)
+		for _, pod := range podList.Items {
+			if api.IsPodReady(&pod) {
+				runningPods++
+			}
+		}
+		fmt.Fprintf(config.Out, "Running pods: %d - Desired pods: %d\n", runningPods, newRc.Spec.Replicas)
 	}
 
 	return newRc, nil
