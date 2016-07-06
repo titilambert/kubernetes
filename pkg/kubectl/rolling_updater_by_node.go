@@ -493,33 +493,36 @@ func (r *RollingUpdaterByNode) scaleUp(newRc, oldRc *api.ReplicationController, 
 		LabelSelector: newPodsLabel,
 		FieldSelector: fields.Everything(),
 	}
-	watcher, _ := r.c.Pods(newRc.Namespace).Watch(NewPodsListOptions)
-	if watcher != nil {
-		timer := time.NewTimer(config.CreationTimeout)
-		//ticker.Reset(config.Timeout)
-		runningPods := 0
-		fmt.Fprintf(config.Out, "Waiting for pods creation/readiness\n")
-		// Wait to get all pods ready
-		for runningPods < newRc.Spec.Replicas {
-			// Waiting for events or timeout
-			sleep := time.NewTimer(10 * time.Second) // In case we have no event for a while
-			select {
-			case <-timer.C:
-				return nil, fmt.Errorf("Timeout waiting pods creation")
-			case <-watcher.ResultChan():
-			case <-sleep.C:
-			}
-			// init counter
-			runningPods = 0
-			// Counting
-			podList, _ := r.c.Pods(newRc.Namespace).List(NewPodsListOptions)
-			for _, pod := range podList.Items {
-				if api.IsPodReady(&pod) {
-					runningPods++
-				}
-			}
-			fmt.Fprintf(config.Out, "Running pods: %d - Desired pods: %d\n", runningPods, newRc.Spec.Replicas)
-		}
+	watcher, err := r.c.Pods(newRc.Namespace).Watch(NewPodsListOptions)
+    if err != nil {
+        fmt.Fprintf(config.Out, "Error creation pod watcher for pods creation: %s\n", err)
+        return nil, err
+    }
+
+    timer := time.NewTimer(config.CreationTimeout)
+    //ticker.Reset(config.Timeout)
+    runningPods := 0
+    fmt.Fprintf(config.Out, "Waiting for pods creation/readiness\n")
+    // Wait to get all pods ready
+    for runningPods < newRc.Spec.Replicas {
+        // Waiting for events or timeout
+        sleep := time.NewTimer(10 * time.Second) // In case we have no event for a while
+        select {
+        case <-timer.C:
+            return nil, fmt.Errorf("Timeout waiting pods creation")
+        case <-watcher.ResultChan():
+        case <-sleep.C:
+        }
+        // init counter
+        runningPods = 0
+        // Counting
+        podList, _ := r.c.Pods(newRc.Namespace).List(NewPodsListOptions)
+        for _, pod := range podList.Items {
+            if api.IsPodReady(&pod) {
+                runningPods++
+            }
+        }
+        fmt.Fprintf(config.Out, "Running pods: %d - Desired pods: %d\n", runningPods, newRc.Spec.Replicas)
 	}
 
 	return newRc, nil
