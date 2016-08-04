@@ -216,6 +216,10 @@ func ValidateDeploymentStrategy(strategy *extensions.DeploymentStrategy, fldPath
 		} else {
 			allErrs = append(allErrs, ValidateRollingUpdateDeployment(strategy.RollingUpdate, fldPath.Child("rollingUpdate"))...)
 		}
+    case extensions.RollingUpdateByNodeDeploymentStrategyType:
+        if strategy.RollingUpdate != nil {
+			allErrs = append(allErrs, field.Forbidden(fldPath.Child("rollingUpdate"), "may not be specified when strategy `type` is '"+string(extensions.RollingUpdateByNodeDeploymentStrategyType+"'")))
+		}
 	default:
 		validValues := []string{string(extensions.RecreateDeploymentStrategyType), string(extensions.RollingUpdateDeploymentStrategyType)}
 		allErrs = append(allErrs, field.NotSupported(fldPath, strategy, validValues))
