@@ -305,7 +305,7 @@ const (
 	RollingUpdateDeploymentStrategyType DeploymentStrategyType = "RollingUpdate"
 
 	// Replace the old RCs by new one using rolling update i.e gradually scale down the old RCs and scale up the new one.
-	RollingUpdateByNodeDeploymentStrategyType DeploymentStrategyType = "RollingUpdateByNoe"
+	RollingUpdateByNodeDeploymentStrategyType DeploymentStrategyType = "RollingUpdateByNode"
 )
 
 // Spec to control the desired behavior of rolling update.

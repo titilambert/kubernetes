@@ -28,7 +28,7 @@ import (
 )
 
 // rolloutRolling implements the logic for rolling a new replica set.
-func (dc *DeploymentController) rolloutRolling(deployment *extensions.Deployment) error {
+func (dc *DeploymentController) rolloutRollingByNode(deployment *extensions.Deployment) error {
 	newRS, oldRSs, err := dc.getAllReplicaSetsAndSyncRevision(deployment, true)
 	if err != nil {
 		return err
