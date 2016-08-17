@@ -239,11 +239,13 @@ func (r *RollingUpdaterByNode) Update(config *RollingUpdaterByNodeConfig) error 
 			nbNodeNotAnnotated++
 		}
 	}
-	// Check if all nodes are NOT annotated
-	if len(nodeList.Items) == nbNodeNotAnnotated {
-		// This means no nodes are annotated
-		// So we need to recalculate the number of pod by node
-		// In fact, this is not really a continue
+	// No node is NOT annotated (ALL nodes are annotated)
+	// so we are in a continueRollingUpdate = true
+	if nbNodeNotAnnotated == 0 {
+		continueRollingUpdate = true
+	} else {
+		// But If we got at least one node NOT annotated
+		// so we can considerate it at a new rolling update
 		continueRollingUpdate = false
 	}
 	if !continueRollingUpdate {
