@@ -35,6 +35,126 @@ func (dc *DeploymentController) rolloutRollingByNode(deployment *extensions.Depl
 	}
 	allRSs := append(oldRSs, newRS)
 
+    //////////////////
+    // Get node lists
+    ////////////////
+    // Node label selector
+    label := labels.SelectorFromSet(labels.Set(map[string]string{rollingUpdateLabel: oldRollingUpdateLabelValue}))
+    listOptions := api.ListOptions{
+        LabelSelector: label,
+        FieldSelector: fields.Everything(),
+    }
+    // Get nodes
+    nodeList, err := r.c.Nodes().List(listOptions)
+    if err != nil {
+        return err
+    }
+    if len(nodeList.Items) == 0 && !continueRollingUpdate {
+        return fmt.Errorf("No node with label '%s' found", rollingUpdateLabel)
+    }
+    ///////////////////////
+    //  Count old pods by node
+    ///////////////////////
+    // Prepare labels and fields for old pods
+    oldPodsLabel := labels.SelectorFromSet(oldRc.Spec.Selector)
+    allOldPodsListOptions := api.ListOptions{
+        LabelSelector: oldPodsLabel,
+        FieldSelector: fields.Everything(),
+    }
+
+    // Check if annotations (for pod number) are set on each node
+    annotationsSet := true
+    nbNodeNotAnnotated := 0
+    for _, node := range nodeList.Items {
+        if _, exists := node.Annotations[nodeAnnotationKey]; !exists {
+            // need to set annotations
+            annotationsSet = false
+            nbNodeNotAnnotated++
+        }
+    }
+    // No node is NOT annotated (ALL nodes are annotated)
+    // so we are in a continueRollingUpdate = true
+    if nbNodeNotAnnotated == 0 {
+        continueRollingUpdate = true
+    } else {
+        // But If we got at least one node NOT annotated
+        // so we can considerate it at a new rolling update
+        continueRollingUpdate = false
+    }
+    if !continueRollingUpdate {
+        // Get the number of pod running the old version
+        podList, err := dc.getAllOldPods()
+        if err != nil {
+            return err
+        }
+        // Get nb of old pods by nodes
+        nbPodByNode := make(map[string]int)
+        for _, pod := range podList.Items {
+            if _, ok := nbPodByNode[pod.Spec.NodeName]; !ok {
+                nbPodByNode[pod.Spec.NodeName] = 0
+            }
+            // Increments pod number
+            nbPodByNode[pod.Spec.NodeName] += 1
+        }
+
+        // Set annotation on each node
+        for _, node := range nodeList.Items {
+            // Get last version of the current node
+            node, err := r.c.Nodes().Get(node.Name)
+            // The controller wasn't found, so create it.
+            if node.Annotations == nil {
+                node.Annotations = map[string]string{}
+            }
+            // Update annotations
+            node.Annotations[nodeAnnotationKey] = strconv.Itoa(nbPodByNode[node.Name])
+            node, err = r.c.Nodes().Update(node)
+            if err != nil {
+                return err
+            }
+        }
+    }  else if annotationsSet {
+        // If existed we have to add node with rolling update label
+        // in the node list
+        // Node label selector
+        label := labels.SelectorFromSet(labels.Set(map[string]string{rollingUpdateLabel: "v0.0.0"}))
+        listOptions := api.ListOptions{
+            LabelSelector: label,
+            FieldSelector: fields.Everything(),
+        }
+        // Get nodes
+        oldNodeList, err := r.c.Nodes().List(listOptions)
+        if err != nil {
+            return err
+        }
+        nodeList.Items = append(oldNodeList.Items, nodeList.Items...)
+    } else {
+        return fmt.Errorf("This is a continue rolling update by node but can not found annotation '%s' ", nodeAnnotationKey)
+    }
+
+    fmt.Fprintf(out, "Scaling up %s from %d to %d, scaling down %s from %d to 0 (Node by Node)\n",
+        newRc.Name, newRc.Spec.Replicas, desired, oldRc.Name, oldRc.Spec.Replicas)
+
+    // Update only one node !
+    nodeList.Items()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 	// Scale up, if we can.
 	scaledUp, err := dc.reconcileNewReplicaSet(allRSs, newRS, deployment)
 	if err != nil {
@@ -60,6 +180,53 @@ func (dc *DeploymentController) rolloutRollingByNode(deployment *extensions.Depl
 	// Sync deployment status
 	return dc.syncDeploymentStatus(allRSs, newRS, deployment)
 }
+
+
+
+
+// Return pods list of ALL old ReplicatSets
+func (dc *DeploymentController) getAllOldPods(OldRSs) (*api.PodList, error){
+    podList = *api.PodList
+    for oldRS := range controller.FilterActiveReplicaSets(oldRSs) {
+        // Prepare labels and fields for old pods
+        oldPodsLabel := labels.SelectorFromSet(oldRs.Spec.Selector)
+        allOldPodsListOptions := api.ListOptions{
+            LabelSelector: oldPodsLabel,
+            FieldSelector: fields.Everything(),
+        }
+        // Get the number of pod running the old version
+        partialPodList, err := r.c.Pods(oldRs.Namespace).List(allOldPodsListOptions)
+        if err != nil {
+            return nil, err
+        }
+        podList.Items = append(podList.Items, partialPodList.Items)
+        // TODO cat lists
+    }
+    return podList, nil
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 func (dc *DeploymentController) reconcileNewReplicaSet(allRSs []*extensions.ReplicaSet, newRS *extensions.ReplicaSet, deployment *extensions.Deployment) (bool, error) {
 	if newRS.Spec.Replicas == deployment.Spec.Replicas {
