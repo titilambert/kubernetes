@@ -23,7 +23,7 @@ import (
 	"strconv"
 	"time"
 
-        "github.com/golang/glog"
+	"github.com/golang/glog"
 
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/errors"
@@ -169,7 +169,9 @@ func (r *RollingUpdaterByNode) Update(config *RollingUpdaterByNodeConfig) error 
 	// Set node annotation key
 	nodeAnnotationKey := desiredNodeAnnotation + "-" + oldRc.Namespace + "-" + rollingUpdateLabel
 	// Extract the desired replica count from the controller.
-	desired, err := strconv.Atoi(newRc.Annotations[desiredReplicasAnnotation])
+	var desired int32
+	tmpdesired, err := strconv.Atoi(newRc.Annotations[desiredReplicasAnnotation])
+	desired = int32(tmpdesired)
 	if err != nil {
 		return fmt.Errorf("Unable to parse annotation for %s: %s=%s",
 			newRc.Name, desiredReplicasAnnotation, newRc.Annotations[desiredReplicasAnnotation])
@@ -185,7 +187,7 @@ func (r *RollingUpdaterByNode) Update(config *RollingUpdaterByNodeConfig) error 
 		if existing.Annotations == nil {
 			existing.Annotations = map[string]string{}
 		}
-		existing.Annotations[originalReplicasAnnotation] = strconv.Itoa(existing.Spec.Replicas)
+		existing.Annotations[originalReplicasAnnotation] = strconv.Itoa(int(existing.Spec.Replicas))
 		updated, err := r.c.ReplicationControllers(existing.Namespace).Update(existing)
 		if err != nil {
 			return err
@@ -196,7 +198,9 @@ func (r *RollingUpdaterByNode) Update(config *RollingUpdaterByNodeConfig) error 
 	_, hasOriginalAnnotation = oldRc.Annotations[originalReplicasAnnotation]
 	if !hasOriginalAnnotation {
 	}
-	original, err := strconv.Atoi(oldRc.Annotations[originalReplicasAnnotation])
+	var original int32
+	tmporiginal, err := strconv.Atoi(oldRc.Annotations[originalReplicasAnnotation])
+	original = int32(tmporiginal)
 	if err != nil {
 		return fmt.Errorf("Unable to parse annotation for %s: %s=%s\n",
 			oldRc.Name, originalReplicasAnnotation, oldRc.Annotations[originalReplicasAnnotation])
@@ -308,12 +312,13 @@ func (r *RollingUpdaterByNode) Update(config *RollingUpdaterByNodeConfig) error 
 		}
 
 		// Get Number of pods wanted on the current Node
-		var oldPodNumber int
+		var oldPodNumber int32
 		_, ok = node.Annotations[nodeAnnotationKey]
 		if !ok {
 			oldPodNumber = 0
 		} else {
-			oldPodNumber, err = strconv.Atoi(node.Annotations[nodeAnnotationKey])
+			tempOldPodNum, err := strconv.Atoi(node.Annotations[nodeAnnotationKey])
+			oldPodNumber = int32(tempOldPodNum)
 			if err != nil {
 				return fmt.Errorf("Unable to parse annotation node for %s: %s=%s",
 					node.Name, nodeAnnotationKey, node.Annotations[nodeAnnotationKey])
@@ -334,7 +339,7 @@ func (r *RollingUpdaterByNode) Update(config *RollingUpdaterByNodeConfig) error 
 		// Delete pod and wait deletion
 		/////////////////////////////
 		// Delete old pods
-		nbPods := 0
+		nbPods := int32(0)
 
 		for _, pod := range podList.Items {
 			// Counting nb of pods running on this node
@@ -372,7 +377,7 @@ func (r *RollingUpdaterByNode) Update(config *RollingUpdaterByNodeConfig) error 
 					nbPods = 0
 					// Counting pod deleted still running on this node
 					podList, _ = r.c.Pods(oldRc.Namespace).List(oldPodsListOptions)
-					nbPods = len(podList.Items)
+					nbPods = int32(len(podList.Items))
 				}
 			}
 		}
@@ -456,7 +461,7 @@ func (r *RollingUpdaterByNode) Update(config *RollingUpdaterByNodeConfig) error 
 // scaleUp scales up newRc to desired by whatever increment is possible given
 // the configured surge threshold. scaleUp will safely no-op as necessary when
 // it detects redundancy or other relevant conditions.
-func (r *RollingUpdaterByNode) scaleUp(newRc, oldRc *api.ReplicationController, original, desired, desiredOnNode int, scaleRetryParams *RetryParams, config *RollingUpdaterByNodeConfig) (*api.ReplicationController, error) {
+func (r *RollingUpdaterByNode) scaleUp(newRc, oldRc *api.ReplicationController, original, desired, desiredOnNode int32, scaleRetryParams *RetryParams, config *RollingUpdaterByNodeConfig) (*api.ReplicationController, error) {
 	// If we're already at the desired, do nothing.
 	if newRc.Spec.Replicas == desired {
 		return newRc, nil
@@ -493,7 +498,7 @@ func (r *RollingUpdaterByNode) scaleUp(newRc, oldRc *api.ReplicationController, 
 	if watcher != nil {
 		timer := time.NewTimer(config.CreationTimeout)
 		//ticker.Reset(config.Timeout)
-		runningPods := 0
+		runningPods := int32(0)
 		glog.V(6).Infof("Waiting for pods creation/readiness")
 		// Wait to get all pods ready
 		for runningPods < newRc.Spec.Replicas {
